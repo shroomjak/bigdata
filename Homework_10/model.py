@@ -1,0 +1,63 @@
+import keras
+import numpy as np
+import pandas as pd
+
+neg = pd.read_csv('./negative.csv', header=None, sep=';', low_memory=False).dropna()
+neg = neg.iloc[:, [3, 4]]
+res1 = neg.rename(columns={3: 'comm', 4: 'val'})
+pos = pd.read_csv('./positive.csv', header=None, sep=';', low_memory=False).dropna()
+pos = pos.iloc[:, [3, 4]]
+res2 = pos.rename(columns={3: 'comm', 4: 'val'})
+res = pd.concat([res1, res2]).reset_index()
+
+res['val'] = pd.to_numeric(res['val'], errors='coerce')
+res = res.dropna(subset=['val'])
+
+x = res['comm'].to_numpy()
+y = res['val'].to_numpy()
+y = y.astype(float)
+samples = 200000
+x = x[:samples]
+y = y[:samples]
+rng = np.random.default_rng(42)  # Constant Random Seed
+mask = rng.random(samples)
+train_mask = mask < 0.8  # Train/test split
+test_mask = ~train_mask
+x_train, y_train = x[train_mask], y[train_mask]
+x_test, y_test = x[test_mask], y[test_mask]
+x_train = x_train.astype(object)
+x_test = x_test.astype(object)
+
+BATCH_SIZE = 1024
+VOCAB_SIZE = 5000
+EPOCHS = 25
+encoder = keras.layers.TextVectorization(VOCAB_SIZE)
+encoder.adapt(x_train[:50_000])
+model = keras.Sequential([
+    encoder,
+    keras.layers.Embedding(input_dim=len(encoder.get_vocabulary()), output_dim=16, mask_zero=True),
+    keras.layers.Bidirectional(keras.layers.LSTM(16)),
+    keras.layers.Dense(16, activation='relu'),
+    keras.layers.Dense(1, activation='sigmoid')
+])
+model.compile(loss=keras.losses.BinaryCrossentropy(from_logits=False),
+  optimizer=keras.optimizers.Adam(1e-3),
+  metrics=['accuracy']
+)
+
+ltsm1 = model.fit(x_train, y_train, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=(x_test, y_test), validation_steps=30)
+model.summary()
+
+text = [("Ходили с семьёй, фильм отличный, рекомендуем к просмотру :D!"),
+        ("Редкостная фигня, я разочарован, зачем вообще такое снимать :((( ??")]
+
+
+print(f'1: "{np.array(text)[0]}"\n')
+print(f'2: "{np.array(text)[1]}"\n')
+
+predLTSM = model.predict(np.array(text).astype(object))
+print(f'\nLTSM 1: Уровень позитивности {predLTSM[0][0] * 100 // 0.1 / 10} %\n')
+print(f'\nLTSM 2: Уровень позитивности {predLTSM[1][0] * 100 // 0.1 / 10} %\n')
+
+model.save('./negpos_lstm.keras')
+np.save('./negpos_lstm.voc.npy', encoder.get_vocabulary())
