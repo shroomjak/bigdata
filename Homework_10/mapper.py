@@ -1,47 +1,55 @@
+#!/usr/bin/env python3
 import sys
+import csv
 import numpy as np
 import keras
-import tb
 
-VOCAB_PATH = 'negpos_lstm.voc.npy'
-WEIGHTS_PATH = 'negpos_lstm.weights.h5'
-VOCAB_SIZE = 5000
+VOCAB_PATH = 'imdb_lstm.voc.npy'
+WEIGHTS_PATH = 'imdb_lstm_weights.h5'
 
+# Загрузка словаря
 vocab = np.load(VOCAB_PATH, allow_pickle=True)
 
+# Восстановление архитектуры вручную
 encoder = keras.layers.TextVectorization(
     name='tv',
-    max_tokens=VOCAB_SIZE,
+    max_tokens=1000,
     vocabulary=vocab
 )
 
 model = keras.Sequential([
     encoder,
-    keras.layers.Embedding(input_dim=len(vocab), output_dim=16, mask_zero=True),
-    keras.layers.Bidirectional(keras.layers.LSTM(16)),
-    keras.layers.Dense(16, activation='relu'),
+    keras.layers.Embedding(
+        input_dim=len(vocab),
+        output_dim=16,
+        mask_zero=True
+    ),
+    keras.layers.LSTM(16),
     keras.layers.Dense(1, activation='sigmoid')
 ])
 
+# Построение модели
 model.build(input_shape=(None,))
+
+# Загрузка весов
 model.load_weights(WEIGHTS_PATH)
 
-while True:
-    data = tb.read(2)  # id, comment
-    if data is None:
-        break
+# Обработка CSV
+reader = csv.DictReader(sys.stdin)
 
-    label, comment = data
+for row in reader:
+    text = row.get('article', '')
+    rec_id = row.get('id', '')
 
-    if not label or not comment:
+    if not rec_id or not text:
         continue
 
     try:
         pred = model.predict(
-            np.array([comment], dtype=object),
+            np.array([text], dtype=object),
             verbose=0
         )[0][0]
-
-        print(f"{label}\t{comment}\tpredict: {pred:.2f}")
+        rating = float(pred) * 9.0 + 1.0
+        print(f"{rec_id}\t{pred:.6f}\t{rating:.2f}")
     except Exception as e:
-        sys.stderr.write(f"Error {label}: {e}\n")
+        sys.stderr.write(f"Error: {rec_id}: {e}\n")

@@ -1,0 +1,3 @@
+Создал typed bytes файл из файла csv с помощью скрипта gen_tb.py:
+
+hdfs dfs -cat /BespyatyyIV/task_9_output_tb/part-* | python read_tb.py
