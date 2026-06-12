@@ -26,7 +26,7 @@ model = keras.Sequential([
 model.build(input_shape=(None,))
 model.load_weights(WEIGHTS_PATH)
 
-for _ in range(100):
+while True:
     data = tb.read(2)  # id, comment
     if data is None:
         break
